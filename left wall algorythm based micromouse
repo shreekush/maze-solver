@@ -1,0 +1,429 @@
+
+#define fthold 10// Threshold value in front direction
+#define rthold 15// Threshold value in right direction
+#define lthold 15// Threshold vlaue in left direction
+
+const int t = 1500; // Time alotted for taking 90 degrees for 9V!
+int tfr =2750; // Initial Time for which it moves forward when it chooses forward over right.
+int timefr; // Dynamically set time..for which it moves forward,when it chooses forward over right.
+int tlbef = 440; // Time for which it moves forward before taking left turn.
+int tlaf = 1150; // Time for which it moves forward after taking left turn.
+int nf =0; // Number of times it chooses straight over right.
+int nlr=0; // Number of times it takes left turn.
+bool found=false; // If its true, it indicates that the bot has reached the end!
+int dir[100]; // Array for storing the path of the bot.
+int i=-1; // For the indices of the dir array.
+int dc=10;
+int j=0; // Implies the number of intersections bot passed through.
+// Front US sensor.
+const int trigPinf =A1 ;
+const int echoPinf = A4;
+// Right US sensor.
+const int trigPinr =A2 ;
+const int echoPinr = A5;
+// Left US sensor.
+const int trigPinl = A0;
+const int echoPinl = A3;
+//Booleans for recognising the walls. True if resp sensor distance is less than the resp threshold vlaue.
+bool fsensor; // For the front US sensor.
+bool rsensor; // For the right US sensor.
+bool lsensor; // For the left US sensor.
+// Sorts and returns the median value of a five element array.
+float middleval(float arr[])
+{
+ for(int p=0;p<4;p++)
+ {
+ for(int q=0;q<4;q++)
+ {
+//The below code contains code both for Maze
+//Solving and Shortest path Simplification.
+ if(arr[q]>arr[q+1])
+ {
+ int temp = arr[q];
+ arr[q] = arr[q+1];
+ arr[q+1] = temp;
+ }
+ }
+ }
+ return arr[2]; // Median value.
+}
+// Moves the bot in the forward direction
+void gofront()
+{
+ // Moves forward adjusting its path
+
+ float ldist1 = leftdist();
+ float lconst = ldist1;
+
+ while(ldist1<=5) // Should turn a little to its right
+ {
+ motorf(dc,0);
+
+ delay(t/75);
+
+ ldist1 = leftdist();
+ if(abs(lconst - ldist1)>=0.8||(ldist1>=3.6)){break;}
+ }
+
+ float rdist1 = rightdist();
+ float rconst = rdist1;
+
+ while(rdist1<=5.4) // Should turn a little to its left
+ {
+ motorf(0,dc);
+
+ delay(t/75);
+ rdist1 = rightdist();
+ if(abs(rconst - rdist1)>=0.9){break;}
+ }
+ if(leftdist()>=7.2) // Will move little to its left if its too far from the left wall
+ {
+ motorf(0,dc);
+
+ delay(t/30);
+ }
+
+ digitalWrite(2,LOW);
+ digitalWrite(3,HIGH);
+ digitalWrite(4,LOW);
+ digitalWrite(5,HIGH);
+ }
+
+// Returns the dist of wall in front of it
+float frontdist()
+{
+float gapf;float ticktockf;
+digitalWrite(trigPinf,LOW);
+delayMicroseconds(2);
+digitalWrite(trigPinf,HIGH);
+delayMicroseconds(10);
+digitalWrite(trigPinf,LOW);
+ticktockf = pulseIn(echoPinf,HIGH); // in one cm there are 29 microseconds.
+gapf = ticktockf*0.0344/2;
+return gapf;
+}
+// Returns the distance the wall to its right side
+float rightdist()
+{
+ float gapr;float ticktockr;
+ digitalWrite(trigPinr,LOW);
+ delayMicroseconds(2);
+ digitalWrite(trigPinr,HIGH);
+ delayMicroseconds(10);
+ digitalWrite(trigPinr,LOW);
+ ticktockr = pulseIn(echoPinr,HIGH);
+ gapr = ticktockr*0.0344/2;
+ return gapr;
+}
+// Returns the distance of the wall to its left side
+float leftdist()
+{
+ float gapl;float ticktockl;
+
+ digitalWrite(trigPinl,LOW);
+ delayMicroseconds(2);
+ digitalWrite(trigPinl,HIGH);
+ delayMicroseconds(10);
+ digitalWrite(trigPinl,LOW);
+ ticktockl = pulseIn(echoPinl,HIGH);
+ gapl = ticktockl*0.0334/2;
+ return gapl;
+}
+// Reduces the path if it can be shortened and dynamically modifies the pathstoring array.
+void reduce(int dir[], int &pt)
+{
+int i=pt;
+if(i>=2)
+ {
+ //RUL = U..
+ if((dir[i-1]==3)&&(dir[i-2]==2)&&(dir[i]==1))
+ {
+ dir[i-2]=3;
+ pt = pt -2;
+ }
+ //LUL = F..
+ else if((dir[i-1]==3)&&(dir[i-2]==1)&&(dir[i]==1))
+ {
+ dir[i-2]=0;
+ pt = pt -2;
+ }
+ //LUR = U..
+ else if((dir[i-1]==3)&&(dir[i-2]==1)&&(dir[i]==2))
+ {
+ dir[i-2]=3;
+ pt = pt -2;
+ }
+//FUF = U..
+else if((dir[i-1]==3)&&(dir[i-2]==0)&&(dir[i]==0))
+ {
+ dir[i-2]=3;
+ pt = pt -2;
+ }
+//FUL = R..
+else if((dir[i-1]==3)&&(dir[i-2]==0)&&(dir[i]==1))
+ {
+ dir[i-2]=2;
+ pt = pt -2;
+ }
+//LUF = R..
+else if((dir[i-1]==3)&&(dir[i-2]==1)&&(dir[i]==0))
+ {
+ dir[i-2]=2;
+ pt = pt -2;
+ }
+return;
+ }
+}
+// Stops the bot
+void stopit()
+{
+ motorf(0,0);
+}
+// When it has to move forward according to the shortest path.(At some intersection)
+void frontturn()
+{
+
+ for(int n=1;n<=8;n++)
+ {gofront();delay((timefr)/8);}
+
+
+motorf(0,0);
+ delay(1000);
+}
+// When it has to take a right turn according to the shortest path.
+void rightturn()
+{ stopit();delay(1000);
+ float prevfdist = frontdist();
+
+//while( abs(frontdist()-prevfdist)<=(prevfdist/2)-1)
+ for(int n=1;n<=5;n++)
+ {gofront();delay(260);}
+
+ motorf(dc,dc);
+ delay(t);
+
+ // gofront();delay(2400);
+ float prevfrdist = frontdist();
+
+ while( abs(frontdist()-prevfrdist)<=18)
+/* for(int n=1;n<=10;n++)*/
+ {gofront();delay(300);}
+ motorf(0,0);
+ delay(1000);
+}
+void setup() // put your setup code here, to run once:
+{ 
+ // US pins setup..
+ pinMode (trigPinf,OUTPUT);
+ pinMode (echoPinf,INPUT);
+ pinMode (trigPinr,OUTPUT);
+ pinMode (echoPinr,INPUT);
+ pinMode (trigPinl,OUTPUT);
+ pinMode (echoPinl,INPUT);
+ //pinMode( ,INPUT); // FOR THE IR SENSOR...
+
+ // Motor pins.
+ pinMode(2,OUTPUT);
+ pinMode(3,OUTPUT);
+ pinMode(4,OUTPUT);
+ pinMode(5,OUTPUT);
+
+ Serial.begin(9600); //staartingg serial communication...9600 bits per second.
+
+// dir[0] = 0; // initial direction..?
+}
+void loop() // put your main code here, to run repeatedly
+{
+    if(nlr==7)
+    {
+        found=true; // Reached the end.
+        for(int i=0;i<=2;i++)
+        {
+            Serial.print(dir[i]);
+        }
+        i=-1;j=0; nlr=0; // Back to start again..
+        // Stops the bot for 30 seconds after reaching the end.
+         motorf(0,0);
+        delay(30000);
+    }
+
+    float fdist; float rdist; float ldist; // front, right, and left distances.
+    float fduration;float rduration;float lduration; // front, right, and left travel time in echoPin.
+    float fdur[5]; float rdur[5]; float ldur[5]; // Arrays which store thevalues of five durations... We will take only the median value(afer sorting)with error bearing capacity of 40%.
+    float ldista[5];
+
+    // For the front US sensor..
+    for(int i=0;i<=4;i++)
+    {
+        digitalWrite(trigPinf,LOW); // Clearing the trigPin.
+        delayMicroseconds(5);
+        digitalWrite(trigPinf,HIGH); // Setting the trigPin HIGH for 10 microseconds..sends some 8cycle sonics.
+        delayMicroseconds(10);
+        digitalWrite(trigPinf,LOW);
+        fdur[i] = pulseIn(echoPinf,HIGH); // Returns the time for which the wave travelled.
+    }
+    fduration = middleval(fdur);
+    fdist = fduration*0.0344/2; // Distance of the wall in the forward direction
+
+    // for the right US sensor...
+    for(int i=0;i<=4;i++)
+    {
+        digitalWrite(trigPinr,LOW);
+        delayMicroseconds(5);
+        digitalWrite(trigPinr,HIGH);
+        delayMicroseconds(10);
+        digitalWrite(trigPinr,LOW);
+        rdur[i] = pulseIn(echoPinr,HIGH);
+    }
+    rduration = middleval(rdur);
+    rdist = rduration*0.0344/2; // Distance of the wall to its right.
+
+    // for the left US sensor....
+    for(int i=0;i<=4;i++)
+    {
+        digitalWrite(trigPinl,LOW);
+        delayMicroseconds(5);
+        digitalWrite(trigPinl,HIGH);
+        delayMicroseconds(10);
+        digitalWrite(trigPinl,LOW);
+        ldur[i] = pulseIn(echoPinl,HIGH);
+    }
+    lduration = middleval(ldur);
+    ldist = lduration*0.0344/2; // Distance of the wall to its left side
+    if((fdist>=125)||(rdist>=150)||(ldist>=400)) {return;} // Cancelling out anyerror values...goes back to void loop().
+    fsensor = false;rsensor = false;lsensor = false; // Setting up thebooleans.
+    if(rdist<=rthold) rsensor = true;
+    if(ldist<=lthold) lsensor = true;
+    if(fdist<=fthold) fsensor = true;
+    // Left Wall Following Algorithm!
+    // If left is closed 
+    if((lsensor==true))
+    // for a U-turn..
+
+    if((rsensor==true)&&(fsensor==true))
+    {
+        j=j+1;
+        i=i+1;
+        dir[i] = 3;
+        reduce(dir,i);
+        digitalWrite(2,HIGH);
+        digitalWrite(3,LOW);
+        digitalWrite(4,LOW);
+        digitalWrite(5,HIGH);
+        delay(2*t);
+    }
+    // If Front is open..
+    else if(fsensor==false)
+    {
+        if((rsensor==false)&&(frontdist()>=40)) // If both front and right are open..
+        {
+            i = i+1;
+            j=j+1;
+            if((found==true)&(dir[i]!=0)) // After reaching the end ... checks the s
+            {
+                rightturn();return;
+            }
+            else
+            {
+                if(found==false)
+                {
+                    dir[i] = 0; // moving forward over right...
+                    reduce(dir,i);
+                }
+                timefr = tfr + 65*nf;
+                nf=nf+1;
+                stopit();delay(1000);
+                for(int g=1;g<=10;g++){gofront();delay(timefr/10);}
+                stopit();delay(1000);
+            }
+        }
+        else
+        {
+            gofront();delay(300);
+        } // Else moving forward .. only front is open.
+    }
+    //for a right turn..
+    else
+    {
+        i = i+1;
+        j=j+1;
+        dir[i] = 2;
+        reduce(dir,i);
+        float prevfdist = frontdist();
+
+        while( abs(frontdist()-prevfdist)<=(prevfdist/2)-2)
+        {
+            gofront();delay(300);
+            if(frontdist()<=4.5){break;}
+        }
+        digitalWrite(2,HIGH); delayMicroseconds(10*dc) ;
+        digitalWrite(2,LOW); delayMicroseconds(1000-10*dc);
+        digitalWrite(3,LOW);
+        digitalWrite(4,LOW);
+        digitalWrite(5,HIGH);delayMicroseconds(10*dc);
+        digitalWrite(5,LOW);delayMicroseconds(1000-10*dc);
+        delay(t);
+        float prevfrdist = frontdist();
+        while( abs(frontdist()-prevfrdist)<=15.2)
+        {
+            gofront();delay(300);
+            if(frontdist()<=4.5){break;}
+        }
+    }
+    //for a left turn..
+    i=i+1;
+    j=j+1;
+    if((found==true)&&(dir[i]!=1))
+    {
+    }
+    if((dir[i]==2)&&(rightdist>=10))
+    {
+        rightturn();return;
+    }
+    else if((dir[i]== 0)&&(fsensor==false))
+    {
+        frontturn();return;
+    }
+    else
+    {
+        dir[i]=1; // Left turn..
+        nlr=nlr+1;
+        reduce(dir,i); //calling reduce function to shorten the path dynamically..if path is not yet completed
+        gofront(); delay(tlbef);
+    }
+    motorf(0,dc);
+    delay(2*t);
+    for(int n=1;n<=8;n++) { gofront();delay(tlaf/8);}
+    stopit();delay(1000);
+}
+//VOIDS
+void motorf(int l,int r){
+  int ld=1000*(l/100);
+  int rd=1000*(r/100);
+  digitalWrite(2,HIGH);
+  delayMicroseconds(ld);
+  digitalWrite(2,LOW);
+  delayMicroseconds(1000-ld);
+  digitalWrite(3,LOW);
+  digitalWrite(4,HIGH);
+  delayMicroseconds(rd);
+  digitalWrite(4,LOW);
+  delayMicroseconds(1000-rd);
+  digitalWrite(5,LOW);
+  
+}
+
+void motorb(int l,int r){
+int  ld=1000*(l/100);
+  int rd=1000*(r/100);
+  digitalWrite(3,HIGH);
+  delayMicroseconds(ld);
+  digitalWrite(3,LOW);
+  delayMicroseconds(1000-ld);
+  digitalWrite(2,LOW);
+  digitalWrite(5,HIGH);
+  delayMicroseconds(rd);
+  digitalWrite(5,LOW);
+  delayMicroseconds(1000-rd);
+  digitalWrite(4,LOW);
+}
